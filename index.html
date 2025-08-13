@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Creator Performance Dashboard</title>
+    <style>
+        /* Basic CSS Reset & Font */
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg-color: #ffffff;
+            --text-color: #334155;
+            --text-light-color: #64748b;
+            --border-color: #e2e8f0;
+            --primary-color: #4f46e5;
+            --secondary-color: #10b981;
+            --accent-color: #f97316;
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            line-height: 1.5;
+        }
+        /* Layout */
+        .container { max-width: 1280px; margin: 0 auto; padding: 2rem; }
+        .grid { display: grid; gap: 1.5rem; }
+        .grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+        @media (max-width: 1024px) { .lg-grid-cols-3 { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 768px) { .grid-cols-4, .grid-cols-2 { grid-template-columns: 1fr; } }
+
+        /* Components */
+        .card { background-color: var(--card-bg-color); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow); border: 1px solid var(--border-color); }
+        .kpi-card h3 { font-size: 0.875rem; color: var(--text-light-color); font-weight: 600; }
+        .kpi-card p { font-size: 1.875rem; font-weight: 700; margin-top: 0.5rem; }
+        .chart-container { height: 300px; }
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th, td { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-color); }
+        thead th { background-color: #f1f5f9; font-size: 0.75rem; text-transform: uppercase; color: var(--text-light-color); cursor: pointer; }
+        tbody tr:hover { background-color: #f8fafc; }
+        .filter-group, .control-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; align-items: end; }
+        select, input[type="text"], input[type="date"] { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; font-size: 1rem; }
+        .upload-btn { background-color: var(--primary-color); color: white; padding: 0.75rem 1rem; border-radius: 0.5rem; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: 600; }
+        .upload-btn svg { margin-right: 0.5rem; }
+        .scrollable-chart { height: 400px; overflow-y: auto; padding-right: 10px; }
+        .scrollable-chart::-webkit-scrollbar { width: 8px; }
+        .scrollable-chart::-webkit-scrollbar-track { background: #f1f5f9; }
+        .scrollable-chart::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="mb-8">
+            <h1 class="text-4xl font-bold">Creator Performance Dashboard</h1>
+            <p class="text-gray-500 mt-1">A self-reliant, zero-dependency analytics tool.</p>
+        </header>
+
+        <div class="grid lg-grid-cols-3 gap-4 mb-8">
+            <div class="card filter-group" style="grid-column: span 2 / span 2;">
+                <div>
+                    <label for="creator-filter" class="text-sm font-medium">Creator</label>
+                    <select id="creator-filter"></select>
+                </div>
+                <div>
+                    <label for="asin-filter" class="text-sm font-medium">ASIN</label>
+                    <select id="asin-filter"></select>
+                </div>
+                <div>
+                    <label for="start-date" class="text-sm font-medium">Start Date</label>
+                    <input type="date" id="start-date">
+                </div>
+                <div>
+                    <label for="end-date" class="text-sm font-medium">End Date</label>
+                    <input type="date" id="end-date">
+                </div>
+            </div>
+            <div class="card control-group">
+                 <div style="position: relative;">
+                    <label for="search-input" class="text-sm font-medium">Search</label>
+                    <input type="text" id="search-input" placeholder="Creator or ASIN...">
+                </div>
+                <div>
+                    <label for="csv-upload" class="upload-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                        Upload CSV
+                    </label>
+                    <input id="csv-upload" type="file" accept=".csv" class="hidden" style="display:none;">
+                </div>
+            </div>
+        </div>
+
+        <div id="kpi-cards" class="grid grid-cols-4 mb-8"></div>
+        
+        <div class="grid grid-cols-2 mb-8">
+            <div class="card">
+                <h3 class="text-lg font-semibold mb-4">Sales by Creator</h3>
+                <div id="creator-chart" class="chart-container"></div>
+            </div>
+            <div class="card">
+                <h3 class="text-lg font-semibold mb-4">Sales Over Time</h3>
+                <div id="date-chart" class="chart-container"></div>
+            </div>
+        </div>
+
+        <div class="card mb-8">
+            <h3 class="text-lg font-semibold mb-4">Sales by Product (ASIN)</h3>
+            <div id="asin-chart-container" class="scrollable-chart">
+                <div id="asin-chart"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 class="text-lg font-semibold mb-4">Detailed Sales Data</h3>
+            <div class="table-container">
+                <table id="sales-table">
+                    <thead></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA ---
+        let salesData = [];
+        const initialCsvData = `
+Date,Country,Status,Currency,Creator Name,ASIN,Spend,Clicks,Orders,Sales
+11-Jul-25,United States,DELIVERING,USD,Sarah Pennington,B0BRNY5FMN,0,1,0,0
+20-Jul-25,United States,DELIVERING,USD,Sarah Pennington,B0BRNY5FMN,0,1,0,0
+27-Jul-25,United States,DELIVERING,USD,Sarah Pennington,B0BRNY5FMN,0,2,0,0
+26-Jul-25,United States,DELIVERING,USD,AOL,B0BRNX66Z2,1.998,0,2,19.98
+9-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B084SBT9PW,0.999,0,1,9.99
+11-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B084SBT9PW,0.999,0,1,9.99
+26-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B088JZK6FQ,1.234,0,1,12.34
+9-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B08QJ14VX5,0.999,0,1,9.99
+15-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B08VS32MMG,1.263,0,1,12.63
+20-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B08VS32MMG,1.329,0,1,13.29
+13-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B08Z1FL1RC,1.698,0,2,16.98
+14-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B08Z1WVK8K,2.598,0,2,25.98
+10-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B094YTH8WG,0.999,0,1,9.99
+15-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B094YTH8WG,1.216,0,1,12.16
+9-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B09PC9L3CY,0.999,0,1,9.99
+23-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B09V735MH7,1.234,0,1,12.34
+8-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B0B1PH9WHB,1.198,0,1,11.98
+16-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B0BJTLFJ4B,1.281,0,1,12.81
+26-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B0BJTLFJ4B,1.281,0,1,12.81
+8-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B0BRMFDYM6,0.999,0,1,9.99
+11-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B0BRNX66Z2,0.999,0,1,9.99
+17-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B0BRNX66Z2,2.524,0,2,25.24
+7-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B0BRNYRSBF,1.799,0,1,17.99
+13-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B0BRNZ16D3,1.349,0,1,13.49
+10-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B0C3GXDCQY,0.999,0,1,9.99
+9-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B0C3ZGPYRW,0.999,0,1,9.99
+13-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B0CF4KDDDM,1.424,0,1,14.24
+10-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B0CF4V75WG,0.999,0,1,9.99
+16-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B0CF4W4712,1.262,0,1,12.62
+9-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B0CR9LC6LW,2.198,0,2,21.98
+11-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B0CSJM55RC,1.199,0,1,11.99
+14-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B0CSJM55RC,1.424,0,1,14.24
+19-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B0CSJM55RC,1.499,0,1,14.99
+15-Jul-25,United States,DELIVERING,USD,Brainjolt Media,B0CSK7GX16,1.186,0,1,11.86
+23-Jul-25,United States,DELIVERING,USD,Travel + Leisure,B084SBT9PW,1.262,0,1,12.62
+8-Jul-25,United States,DELIVERING,USD,Travel + Leisure,B0CSJM55RC,1.199,0,1,11.99
+`;
+
+        // --- UTILS ---
+        const parseCSV = (data) => {
+            const rows = data.trim().split('\n');
+            const headers = rows.shift().split(',').map(h => h.trim().replace(/\s+/g, ''));
+            return rows.map(row => {
+                const values = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                const obj = {};
+                headers.forEach((header, i) => {
+                    let value = values[i] ? values[i].trim() : '';
+                    if (['Spend', 'Clicks', 'Orders', 'Sales'].includes(header)) {
+                        value = parseFloat(value) || 0;
+                    }
+                    obj[header] = value;
+                });
+                obj.Commission = obj.Sales * 0.10; // Assume 10% commission
+                return obj;
+            }).filter(Boolean);
+        };
+
+        const parseDate = (dateStr) => {
+            const [day, monthStr, year] = dateStr.split('-');
+            const monthMap = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+            return new Date(`20${year}`, monthMap[monthStr], day);
+        };
+
+        const formatCurrency = (value) => `$${value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        const formatNumber = (value) => value.toLocaleString();
+
+        // --- STATE & RENDERING ---
+        let state = {
+            creator: 'all',
+            asin: 'all',
+            startDate: '',
+            endDate: '',
+            search: '',
+            sortKey: 'Date',
+            sortDir: 'desc'
+        };
+
+        const setState = (newState) => {
+            state = { ...state, ...newState };
+            render();
+        };
+
+        const render = () => {
+            // Filter and sort data
+            let filteredData = salesData.filter(d => {
+                const searchMatch = state.search ? (d['CreatorName'] && d['CreatorName'].toLowerCase().includes(state.search)) || (d.ASIN && d.ASIN.toLowerCase().includes(state.search)) : true;
+                const creatorMatch = state.creator === 'all' || d['CreatorName'] === state.creator;
+                const asinMatch = state.asin === 'all' || d.ASIN === state.asin;
+                const date = parseDate(d.Date);
+                const startMatch = !state.startDate || date >= new Date(state.startDate);
+                const endMatch = !state.endDate || date <= new Date(state.endDate);
+                return searchMatch && creatorMatch && asinMatch && startMatch && endMatch;
+            });
+
+            filteredData.sort((a, b) => {
+                const valA = state.sortKey === 'Date' ? parseDate(a[state.sortKey]) : a[state.sortKey];
+                const valB = state.sortKey === 'Date' ? parseDate(b[state.sortKey]) : b[state.sortKey];
+                if (valA < valB) return state.sortDir === 'asc' ? -1 : 1;
+                if (valA > valB) return state.sortDir === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            // Render components
+            renderKPIs(filteredData);
+            renderTable(filteredData);
+            renderCreatorChart(filteredData);
+            renderDateChart(filteredData);
+            renderAsinChart(filteredData);
+        };
+        
+        const renderKPIs = (data) => {
+            const totalSales = data.reduce((sum, d) => sum + d.Sales, 0);
+            const totalCommission = data.reduce((sum, d) => sum + d.Commission, 0);
+            const totalOrders = data.reduce((sum, d) => sum + d.Orders, 0);
+            const totalClicks = data.reduce((sum, d) => sum + d.Clicks, 0);
+
+            const kpiContainer = document.getElementById('kpi-cards');
+            kpiContainer.innerHTML = `
+                <div class="card kpi-card"><h3>Total Sales</h3><p>${formatCurrency(totalSales)}</p></div>
+                <div class="card kpi-card"><h3>Total Commission</h3><p>${formatCurrency(totalCommission)}</p></div>
+                <div class="card kpi-card"><h3>Total Orders</h3><p>${formatNumber(totalOrders)}</p></div>
+                <div class="card kpi-card"><h3>Total Clicks</h3><p>${formatNumber(totalClicks)}</p></div>
+            `;
+        };
+
+        const renderTable = (data) => {
+            const tableHead = document.querySelector('#sales-table thead');
+            const tableBody = document.querySelector('#sales-table tbody');
+            const headers = ['Date', 'CreatorName', 'ASIN', 'Sales', 'Orders', 'Clicks', 'Spend'];
+            
+            tableHead.innerHTML = `<tr>${headers.map(h => `<th data-key="${h}">${h.replace('Name','')} <span style="font-size: 10px;">&#9660;&#9650;</span></th>`).join('')}</tr>`;
+            tableBody.innerHTML = data.map(d => `
+                <tr>
+                    <td>${d.Date}</td>
+                    <td>${d['CreatorName']}</td>
+                    <td>${d.ASIN}</td>
+                    <td>${formatCurrency(d.Sales)}</td>
+                    <td>${formatNumber(d.Orders)}</td>
+                    <td>${formatNumber(d.Clicks)}</td>
+                    <td>${formatCurrency(d.Spend)}</td>
+                </tr>
+            `).join('');
+
+            tableHead.querySelectorAll('th').forEach(th => {
+                th.addEventListener('click', () => {
+                    const key = th.dataset.key;
+                    const dir = state.sortKey === key && state.sortDir === 'asc' ? 'desc' : 'asc';
+                    setState({ sortKey: key, sortDir: dir });
+                });
+            });
+        };
+        
+        const createSVGChart = (containerId, data, { type, xKey, yKey, color, labelY, labelX }) => {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            container.innerHTML = '';
+            const margin = { top: 20, right: 20, bottom: 50, left: 60 };
+            const width = container.clientWidth - margin.left - margin.right;
+            const height = container.clientHeight - margin.top - margin.bottom;
+            
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.setAttribute("width", "100%");
+            svg.setAttribute("height", "100%");
+            svg.setAttribute("viewBox", `0 0 ${container.clientWidth} ${container.clientHeight}`);
+            const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            g.setAttribute("transform", `translate(${margin.left},${margin.top})`);
+            svg.appendChild(g);
+
+            const maxValue = Math.max(...data.map(d => d[yKey]));
+
+            // Axes
+            // Y-axis
+            for (let i = 0; i <= 5; i++) {
+                const y = height - (i / 5) * height;
+                const value = (i / 5) * maxValue;
+                const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                line.setAttribute("x1", 0); line.setAttribute("x2", width); line.setAttribute("y1", y); line.setAttribute("y2", y);
+                line.setAttribute("stroke", "#e2e8f0"); line.setAttribute("stroke-dasharray", "4");
+                g.appendChild(line);
+                const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                text.setAttribute("x", -10); text.setAttribute("y", y + 5); text.setAttribute("text-anchor", "end"); text.setAttribute("font-size", "12");
+                text.textContent = type === 'bar-vertical' ? `$${(value/1000).toFixed(0)}k` : `$${value.toFixed(0)}`;
+                g.appendChild(text);
+            }
+            // X-axis
+            const bandWidth = width / data.length;
+            data.forEach((d, i) => {
+                const x = (i + 0.5) * bandWidth;
+                const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                text.setAttribute("x", x); text.setAttribute("y", height + 20); text.setAttribute("text-anchor", "middle"); text.setAttribute("font-size", "12");
+                text.textContent = d[xKey].length > 10 ? d[xKey].substring(0,8)+'...' : d[xKey];
+                g.appendChild(text);
+            });
+            
+            // Bars or Line
+            if (type.startsWith('bar')) {
+                data.forEach((d, i) => {
+                    const barHeight = (d[yKey] / maxValue) * height;
+                    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                    rect.setAttribute("x", i * bandWidth + bandWidth*0.1);
+                    rect.setAttribute("y", height - barHeight);
+                    rect.setAttribute("width", bandWidth * 0.8);
+                    rect.setAttribute("height", barHeight);
+                    rect.setAttribute("fill", color);
+                    g.appendChild(rect);
+                });
+            } else if (type === 'line') {
+                const pathData = data.map((d, i) => {
+                    const x = (i + 0.5) * bandWidth;
+                    const y = height - (d[yKey] / maxValue) * height;
+                    return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+                }).join(' ');
+                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path.setAttribute("d", pathData);
+                path.setAttribute("fill", "none");
+                path.setAttribute("stroke", color);
+                path.setAttribute("stroke-width", "2");
+                g.appendChild(path);
+            }
+            container.appendChild(svg);
+        };
+        
+        const createVerticalBarChart = (containerId, data, { xKey, yKey, color }) => {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            const maxValue = Math.max(...data.map(d => d[yKey]));
+            data.forEach(d => {
+                const barWrapper = document.createElement('div');
+                barWrapper.style.display = 'flex';
+                barWrapper.style.alignItems = 'center';
+                barWrapper.style.marginBottom = '8px';
+                
+                const label = document.createElement('div');
+                label.textContent = d[xKey];
+                label.style.width = '100px';
+                label.style.flexShrink = '0';
+                label.style.fontSize = '12px';
+                label.style.overflow = 'hidden';
+                label.style.textOverflow = 'ellipsis';
+                
+                const bar = document.createElement('div');
+                bar.style.width = `${(d[yKey] / maxValue) * 100}%`;
+                bar.style.height = '25px';
+                bar.style.backgroundColor = color;
+                bar.style.borderRadius = '0 4px 4px 0';
+
+                barWrapper.appendChild(label);
+                barWrapper.appendChild(bar);
+                container.appendChild(barWrapper);
+            });
+        };
+
+        const renderCreatorChart = (data) => {
+            const creatorData = Object.values(data.reduce((acc, d) => {
+                if(!acc[d['CreatorName']]) acc[d['CreatorName']] = { CreatorName: d['CreatorName'], Sales: 0 };
+                acc[d['CreatorName']].Sales += d.Sales;
+                return acc;
+            }, {})).sort((a,b) => b.Sales - a.Sales).slice(0, 10);
+            createSVGChart('creator-chart', creatorData, { type: 'bar', xKey: 'CreatorName', yKey: 'Sales', color: 'var(--primary-color)' });
+        };
+        
+        const renderDateChart = (data) => {
+            const dateData = Object.values(data.reduce((acc, d) => {
+                if(!acc[d.Date]) acc[d.Date] = { Date: d.Date, Sales: 0 };
+                acc[d.Date].Sales += d.Sales;
+                return acc;
+            }, {})).sort((a,b) => parseDate(a.Date) - parseDate(b.Date));
+            createSVGChart('date-chart', dateData, { type: 'line', xKey: 'Date', yKey: 'Sales', color: 'var(--secondary-color)' });
+        };
+
+        const renderAsinChart = (data) => {
+            const asinData = Object.values(data.reduce((acc, d) => {
+                if(!acc[d.ASIN]) acc[d.ASIN] = { ASIN: d.ASIN, Sales: 0 };
+                acc[d.ASIN].Sales += d.Sales;
+                return acc;
+            }, {})).sort((a,b) => b.Sales - a.Sales);
+             createVerticalBarChart('asin-chart', asinData, { xKey: 'ASIN', yKey: 'Sales', color: 'var(--accent-color)' });
+        };
+
+        const setupEventListeners = () => {
+            document.getElementById('creator-filter').addEventListener('change', (e) => setState({ creator: e.target.value }));
+            document.getElementById('asin-filter').addEventListener('change', (e) => setState({ asin: e.target.value }));
+            document.getElementById('start-date').addEventListener('change', (e) => setState({ startDate: e.target.value }));
+            document.getElementById('end-date').addEventListener('change', (e) => setState({ endDate: e.target.value }));
+            document.getElementById('search-input').addEventListener('input', (e) => setState({ search: e.target.value.toLowerCase() }));
+            document.getElementById('csv-upload').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        salesData = parseCSV(ev.target.result);
+                        initialize();
+                    };
+                    reader.readAsText(file);
+                }
+            });
+        };
+
+        const initialize = () => {
+            const uniqueCreators = ['all', ...new Set(salesData.map(d => d['CreatorName']).filter(Boolean))];
+            const uniqueAsins = ['all', ...new Set(salesData.map(d => d.ASIN).filter(Boolean))];
+            
+            const creatorSelect = document.getElementById('creator-filter');
+            creatorSelect.innerHTML = uniqueCreators.map(c => `<option value="${c}">${c === 'all' ? 'All Creators' : c}</option>`).join('');
+            
+            const asinSelect = document.getElementById('asin-filter');
+            asinSelect.innerHTML = uniqueAsins.map(a => `<option value="${a}">${a === 'all' ? 'All ASINs' : a}</option>`).join('');
+            
+            render();
+        };
+        
+        // --- INITIALIZATION ---
+        window.onload = () => {
+            salesData = parseCSV(initialCsvData);
+            setupEventListeners();
+            initialize();
+        };
+    </script>
+</body>
+</html>
